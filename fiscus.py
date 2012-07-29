@@ -19,6 +19,9 @@ DBNAME = 'buchungen.db'
 engine = create_engine('sqlite:///' + DBNAME)
 Session = sessionmaker(bind=engine)
 
+# Standardwerte für die Spalten (wichtig für die Verhältnisse):
+C_T, C_G, C_V = 14, 23, 23
+
 Base = declarative_base()
 
 
@@ -33,11 +36,36 @@ class Buchung(Base):
     kontonummer = Column(Integer)
     blz = Column(Integer)
 
+    def proper_length(self, t, g, v):
+        global C_T, C_G, C_V
+        if len(t) <= C_T and len(g) <= C_G and len(v) <= C_V:
+            return True
+        else:
+            return False
+
     def __repr__(self):
-        return "<B('%s', '%s', '%s', '%s', '%s', '%s', '%s')>" %\
-                (self.datum, self.typ, self.betrag, self.gegenseite,
-                        self.verwendungszweck, self.kontonummer,
-                        self.blz)
+        templ = '{0:10} {1:' + str(C_T) +\
+                '} {2:7} {3:' + str(C_G) +\
+                '} {4:' + str(C_V) + '} {5:10} {6:8}'
+        k = self.kontonummer
+        if k is None:
+            k = ''
+        r = templ.format('{:%Y-%m-%d}'.format(self.datum),
+                self.typ[:C_T],
+                '{:+7.2f}'.format(self.betrag),
+                self.gegenseite[:C_G],
+                self.verwendungszweck[:C_V],
+                k, self.blz)
+        t, g, v = self.typ, self.gegenseite, self.verwendungszweck
+        while not(self.proper_length(t, g, v)):
+            t, g, v = t[C_T:], g[C_G:], v[C_V:]
+            r += '\n' + templ.format('',  # leeres Datum
+                    t[:C_T],              # neuer Typ
+                    '',                   # leerer Betrag
+                    g[:C_G],              # neue Gegenseite
+                    v[:C_V],              # neuer Verwendungszweck
+                    '', '')               # leere Ktnr, BLZ
+        return r
 
 
 def ist_datei_latin1(filename):
@@ -91,6 +119,27 @@ def buchungen_in_db_speichern(buchungen):
     s.commit()
 
 
+def list():
+    # optimale Spaltenbreiten berechnen:
+    global C_T, C_G, C_V
+    C_sum = C_T + C_G + C_V
+    TERM_WIDTH = int(subprocess.check_output(
+        ['stty', 'size']).split()[1])
+    C_Space = TERM_WIDTH - 40
+
+    C_T = int(C_T / C_sum * C_Space)
+    C_G = int(C_G / C_sum * C_Space)
+    C_V = int(C_V / C_sum * C_Space)
+    if C_T > 27 or C_G > 46:
+        diff_T, diff_G = C_T - 27, C_G - 46
+        C_T, C_G = 27, 46
+        C_V += diff_T + diff_G
+
+    s = Session()
+    for b in s.query(Buchung).all():
+        print(b)
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -105,6 +154,8 @@ def main():
             buchungsdatei = latin1_nach_utf8(buchungsdatei)
         buchungen = buchungen_aus_datei(buchungsdatei)
         buchungen_in_db_speichern(buchungen)
+    elif args.command == 'list':
+        list()
 
 
 if __name__ == '__main__':
