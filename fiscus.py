@@ -156,10 +156,19 @@ def avg(**filter):
         if b.datum > end:
             end = b.datum
 
-    zeitraum = end - begin
-    templ = '{:+.2f}'
-    print('∅ Einkommen:', templ.format(income / zeitraum.days), '€/d')
-    print('∅ Ausgaben: ', templ.format(expenses / zeitraum.days), '€/d')
+    period = (end - begin).days
+    templ = '{:+8.2f}'
+
+    type = filter.get('type', 'all')
+    if type == 'income':
+        print('∅ Einkommen:', templ.format(income / period), '€/d')
+    elif type == 'expenses':
+        print('∅ Ausgaben: ', templ.format(expenses / period), '€/d')
+    else:
+        print('∅ Einkommen:', templ.format(income / period), '€/d')
+        print('∅ Ausgaben: ', templ.format(expenses / period), '€/d')
+        print('∅ Gesamt:   ', templ.format((income + expenses) /
+            period,), '€/d')
 
 
 def main():
@@ -179,7 +188,9 @@ def main():
     elif args.command == 'list':
         list()
     elif args.command == 'avg':
-        avg()
+        type = args.args[0]
+        assert type in ['income', 'expenses', 'all']
+        avg(type=type)
 
 
 if __name__ == '__main__':
