@@ -16,6 +16,8 @@ from sqlalchemy import Column, Integer, String, Numeric, Date
 from sqlalchemy.orm import sessionmaker
 
 DBNAME = 'buchungen.db'
+engine = create_engine('sqlite:///' + DBNAME)
+Session = sessionmaker(bind=engine)
 
 Base = declarative_base()
 
@@ -77,9 +79,7 @@ def buchungen_aus_datei(filename):
 
 
 def buchungen_in_db_speichern(buchungen):
-    engine = create_engine('sqlite:///' + DBNAME)
     Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
     s = Session()
 
     for b in buchungen:
