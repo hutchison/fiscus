@@ -140,6 +140,28 @@ def list():
         print(b)
 
 
+def avg(**filter):
+    income, expenses = 0, 0
+    begin = filter.get('begin', date.max)
+    end = filter.get('end', date.min)
+
+    s = Session()
+    for b in s.query(Buchung).all():
+        if b.betrag > 0:
+            income += b.betrag
+        else:
+            expenses += b.betrag
+        if b.datum < begin:
+            begin = b.datum
+        if b.datum > end:
+            end = b.datum
+
+    zeitraum = end - begin
+    templ = '{:+.2f}'
+    print('∅ Einkommen:', templ.format(income / zeitraum.days), '€/d')
+    print('∅ Ausgaben: ', templ.format(expenses / zeitraum.days), '€/d')
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -156,6 +178,8 @@ def main():
         buchungen_in_db_speichern(buchungen)
     elif args.command == 'list':
         list()
+    elif args.command == 'avg':
+        avg()
 
 
 if __name__ == '__main__':
