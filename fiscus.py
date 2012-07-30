@@ -201,7 +201,7 @@ def get_extreme_date(which):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('command')
+    parser.add_argument('command', choices=['add', 'list', 'avg'])
     parser.add_argument('args', nargs=argparse.REMAINDER)
 
     parser.add_argument('-b', '--begin', help='Begin of the period.')
