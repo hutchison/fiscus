@@ -4,6 +4,7 @@
 import os
 import argparse
 import subprocess
+import math
 
 import csv
 from datetime import date
@@ -12,6 +13,7 @@ from decimal import Decimal
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, Integer, String, Numeric, Date
+from sqlalchemy import asc, desc
 
 from sqlalchemy.orm import sessionmaker
 
@@ -119,50 +121,60 @@ def buchungen_in_db_speichern(buchungen):
     s.commit()
 
 
-def list():
+def listing(**kwargs):
     # optimale Spaltenbreiten berechnen:
     global C_T, C_G, C_V
     C_sum = C_T + C_G + C_V
     TERM_WIDTH = int(subprocess.check_output(
         ['stty', 'size']).split()[1])
-    C_Space = TERM_WIDTH - 40
+    C_Space = TERM_WIDTH - 41
 
-    C_T = int(C_T / C_sum * C_Space)
-    C_G = int(C_G / C_sum * C_Space)
-    C_V = int(C_V / C_sum * C_Space)
+    C_T = math.floor(C_T / C_sum * C_Space)
+    C_G = math.floor(C_G / C_sum * C_Space)
+    C_V = math.floor(C_V / C_sum * C_Space)
     if C_T > 27 or C_G > 46:
         diff_T, diff_G = C_T - 27, C_G - 46
         C_T, C_G = 27, 46
         C_V += diff_T + diff_G
 
     s = Session()
-    for b in s.query(Buchung).all():
+    q = s.query(Buchung)
+
+    # die Liste nach Datum eingrenzen:
+    b = kwargs.get('begin', get_extreme_date('first'))
+    e = kwargs.get('end', get_extreme_date('latest'))
+    q = q.filter(Buchung.datum >= b, Buchung.datum <= e)
+
+    # auf- oder absteigend?
+    order = kwargs.get('order', 'asc')
+    q = q.order_by(asc(Buchung.datum)).all() if order == 'asc'\
+            else q.order_by(desc(Buchung.datum)).all()
+
+    for b in q:
         print(b)
 
 
-def avg(**filter):
+def avg(**kwargs):
     income, expenses = 0, 0
-    begin = filter.get('begin', date.max)
-    end = filter.get('end', date.min)
+    begin = kwargs.get('begin')
+    end = kwargs.get('end')
 
     s = Session()
-    for b in s.query(Buchung).all():
+    q = s.query(Buchung).filter(Buchung.datum >= begin,
+            Buchung.datum <= end).all()
+    for b in q:
         if b.betrag > 0:
             income += b.betrag
         else:
             expenses += b.betrag
-        if b.datum < begin:
-            begin = b.datum
-        if b.datum > end:
-            end = b.datum
 
     period = (end - begin).days
     templ = '{:+8.2f}'
 
-    type = filter.get('type', 'all')
-    if type == 'income':
+    t = kwargs.get('type', 'all')
+    if t == 'income':
         print('∅ Einkommen:', templ.format(income / period), '€/d')
-    elif type == 'expenses':
+    elif t == 'expenses':
         print('∅ Ausgaben: ', templ.format(expenses / period), '€/d')
     else:
         print('∅ Einkommen:', templ.format(income / period), '€/d')
@@ -171,13 +183,35 @@ def avg(**filter):
             period,), '€/d')
 
 
+def string_to_date(s):
+    if s is None:
+        return None
+    l = list(map(int, s.split('-')))
+    return date(l[0], l[1], l[2])
+
+
+def get_extreme_date(which):
+    s = Session()
+    q = s.query(Buchung.datum)
+    q = q.order_by(asc(Buchung.datum)).first() if which == 'first'\
+            else q.order_by(desc(Buchung.datum)).first()
+    return q[0]
+
+
 def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('command')
     parser.add_argument('args', nargs=argparse.REMAINDER)
 
+    parser.add_argument('-b', '--begin', help='Begin of the period.')
+    parser.add_argument('-e', '--end', help='End of the period.')
+
     args = parser.parse_args()
+
+    b = string_to_date(args.begin) or get_extreme_date('first')
+    e = string_to_date(args.end) or get_extreme_date('latest')
+    assert b < e
 
     if args.command == 'add':
         buchungsdatei = args.args[0]
@@ -186,11 +220,12 @@ def main():
         buchungen = buchungen_aus_datei(buchungsdatei)
         buchungen_in_db_speichern(buchungen)
     elif args.command == 'list':
-        list()
+        o = args.args[0] if len(args.args) > 0 else 'asc'
+        listing(order=o, begin=b, end=e)
     elif args.command == 'avg':
-        type = args.args[0]
-        assert type in ['income', 'expenses', 'all']
-        avg(type=type)
+        t = args.args[0] if len(args.args) > 0 else 'all'
+        assert t in ['income', 'expenses', 'all']
+        avg(type=t, begin=b, end=e)
 
 
 if __name__ == '__main__':
