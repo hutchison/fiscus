@@ -17,8 +17,9 @@ from sqlalchemy import asc, desc
 
 from sqlalchemy.orm import sessionmaker
 
+BASE_PATH = os.path.expanduser('~/.fiscus/')
 DBNAME = 'buchungen.db'
-engine = create_engine('sqlite:///' + DBNAME)
+engine = create_engine('sqlite:///' + BASE_PATH + DBNAME)
 Session = sessionmaker(bind=engine)
 
 # Standardwerte für die Spalten (wichtig für die Verhältnisse):
@@ -209,23 +210,24 @@ def main():
 
     args = parser.parse_args()
 
-    b = string_to_date(args.begin) or get_extreme_date('first')
-    e = string_to_date(args.end) or get_extreme_date('latest')
-    assert b < e
-
     if args.command == 'add':
         buchungsdatei = args.args[0]
         if ist_datei_latin1(buchungsdatei):
             buchungsdatei = latin1_nach_utf8(buchungsdatei)
         buchungen = buchungen_aus_datei(buchungsdatei)
         buchungen_in_db_speichern(buchungen)
-    elif args.command == 'list':
-        o = args.args[0] if len(args.args) > 0 else 'asc'
-        listing(order=o, begin=b, end=e)
-    elif args.command == 'avg':
-        t = args.args[0] if len(args.args) > 0 else 'all'
-        assert t in ['income', 'expenses', 'all']
-        avg(type=t, begin=b, end=e)
+    else:
+        b = string_to_date(args.begin) or get_extreme_date('first')
+        e = string_to_date(args.end) or get_extreme_date('latest')
+        assert b < e
+
+        if args.command == 'list':
+            o = args.args[0] if len(args.args) > 0 else 'asc'
+            listing(order=o, begin=b, end=e)
+        elif args.command == 'avg':
+            t = args.args[0] if len(args.args) > 0 else 'all'
+            assert t in ['income', 'expenses', 'all']
+            avg(type=t, begin=b, end=e)
 
 
 if __name__ == '__main__':
