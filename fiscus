@@ -7,7 +7,7 @@ import subprocess
 import math
 
 import csv
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from sqlalchemy import create_engine
@@ -208,6 +208,10 @@ def main():
     parser.add_argument('-b', '--begin', help='Begin of the period.')
     parser.add_argument('-e', '--end', help='End of the period.')
 
+    parser.add_argument('-l', '--last',
+            help='Limit statistics over the last N days.',
+            type=int, metavar='N')
+
     args = parser.parse_args()
 
     if args.command == 'add':
@@ -217,8 +221,12 @@ def main():
         buchungen = buchungen_aus_datei(buchungsdatei)
         buchungen_in_db_speichern(buchungen)
     else:
-        b = string_to_date(args.begin) or get_extreme_date('first')
-        e = string_to_date(args.end) or get_extreme_date('latest')
+        if args.last:
+            b = date.today() - timedelta(args.last)
+            e = get_extreme_date('latest')
+        else:
+            b = string_to_date(args.begin) or get_extreme_date('first')
+            e = string_to_date(args.end) or get_extreme_date('latest')
         assert b < e
 
         if args.command == 'list':
